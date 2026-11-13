@@ -12,6 +12,7 @@ on:
       - naer_fetch.py
       - naer_read.py
       - styles.css
+      - en_corrections.tsv
       - requirements.txt
   workflow_dispatch:
     inputs:

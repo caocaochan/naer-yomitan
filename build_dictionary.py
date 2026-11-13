@@ -84,11 +84,13 @@ RE_NUMBERED = re.compile(
     r"(?:(?:^|(?<=\s)|(?<=[；;，,。]))\s*(?:\d{1,2}[.．、)）](?!\d)|[(（]\d{1,2}[)）])|[①-⑳])\s*")
 
 
-def split_terms(cell, separators=SEPARATORS):
-    """Split a cell of synonyms (打斷；放棄；故障(測試；發射)) at separators outside brackets.
-    A comma between digits is part of a chemical name (1,2-二氯乙烷), not a separator."""
-    if RE_NUMBERED.match(cell.lstrip()):
-        cell = RE_NUMBERED.sub("\n", cell)
+# The last item of an enumeration carries the conjunction: 故障、組態、歸責、效能及安全管理 is one term.
+# The conjunction must be inside the item, so 和尚魚 and 語意飽和 still count as synonyms.
+RE_ENUM_LAST = re.compile(f"[{HAN}](及|與|与|和|暨|或)[{HAN}]")
+
+
+def _split(cell, separators):
+    """Split at separators outside brackets; a comma between digits (1,2-二氯乙烷) is not one."""
     out, buf, depth = [], [], 0
     for i, ch in enumerate(cell):
         if ch in OPENING:
@@ -102,6 +104,20 @@ def split_terms(cell, separators=SEPARATORS):
         else:
             buf.append(ch)
     out.append("".join(buf))
+    return out
+
+
+def split_terms(cell, separators=SEPARATORS):
+    """Split a cell of synonyms (打斷；放棄；故障(測試；發射)) into terms."""
+    if RE_NUMBERED.match(cell.lstrip()):
+        cell = RE_NUMBERED.sub("\n", cell)
+    out = []
+    for piece in _split(cell, separators.replace("、", "")):
+        parts = _split(piece, "、") if "、" in separators else [piece]
+        if len(parts) > 1 and RE_ENUM_LAST.search(parts[-1]):
+            out.append(piece)  # an enumeration, not synonyms
+        else:
+            out.extend(parts)
     terms = []
     for t in out:
         # 甘薯／白薯／地瓜 lists synonyms; 非同步／同步 inside a longer name does not
@@ -132,8 +148,48 @@ def usable(hw):
     return bool(hw) and RE_HAN.search(hw) is not None and len(hw) <= MAX_HEADWORD_LEN and "_" not in hw
 
 
+def load_corrections(path=ROOT / "en_corrections.tsv"):
+    """Misspelt English words in the source lists (deformaion -> deformation), one per line."""
+    fixes = {}
+    if path.exists():
+        for line in path.read_text(encoding="utf-8").splitlines()[1:]:
+            wrong, _, right = line.partition("\t")
+            if wrong.strip() and right.strip():
+                fixes[wrong.strip().lower()] = right.strip().lower()
+    return fixes
+
+
+EN_CORRECTIONS = load_corrections()
+RE_EN_WORD = re.compile(r"[A-Za-z]+")
+
+
+def correct_word(m):
+    w = m.group(0)
+    fix = EN_CORRECTIONS.get(w.lower())
+    if fix is None:
+        return w
+    if w.isupper() and len(w) > 1:
+        return fix.upper()
+    return fix[0].upper() + fix[1:] if w[0].isupper() else fix
+
+
+RE_EN_PAIR = re.compile(r"\b([A-Za-z]+) ([A-Za-z]+)\b")
+
+
+def join_split_word(m):
+    """'in ternal' -> 'internal' when the correction of the second half is the two halves joined."""
+    first, second = m.group(1), m.group(2)
+    if EN_CORRECTIONS.get(second.lower()) == (first + second).lower():
+        return first + second
+    return m.group(0)
+
+
 def clean_en(s):
-    return RE_SPACES.sub(" ", s).strip().strip("；;,")
+    s = RE_SPACES.sub(" ", s).strip().strip("；;,")
+    if EN_CORRECTIONS:
+        s = RE_EN_PAIR.sub(join_split_word, s)
+        s = RE_EN_WORD.sub(correct_word, s)
+    return s
 
 
 def en_key(en):
@@ -361,9 +417,52 @@ def collect(catalog):
     return groups, n_rows, len(used_files)
 
 
-def final_senses(g):
-    """Senses in display order. A sense without English (a row of the 兩岸 word lists) is kept only
-    for counterparts that no sense with English already shows."""
+variant_folds = []  # (headword, variant, kept spelling), written to dist/variant_folds.tsv
+RE_FOLD_WORD = re.compile(r"[a-z0-9]+")
+
+
+def fold_key(en):
+    """flash over / flashover / Flash-overs all give the same key: case, spaces, hyphens and a
+    plural -s are ignored. Misspellings are fixed word by word through en_corrections.tsv instead,
+    since an edit-distance rule would also merge different words (mode/model, inverse/adverse)."""
+    words = RE_FOLD_WORD.findall(en_key(en))
+    return "".join(w[:-1] if len(w) > 3 and w.endswith("s") and not w.endswith("ss") else w for w in words)
+
+
+def fold_variants(g, key):
+    """Merge English equivalents that differ only in formatting into the best-attested spelling."""
+    senses = sorted((s for s in g.senses.values() if s.en), key=lambda s: (-len(s.domains), -s.rows, s.order))
+    if len(senses) < 2:
+        return
+    kept = {}
+    for s in senses:
+        fk = fold_key(s.en)
+        target = kept.get(fk)
+        if target is None or not fk:
+            kept.setdefault(fk, s)
+            continue
+        variant_folds.append((key, s.en, target.en))
+        target.rows += s.rows
+        for label, title in s.domains.items():
+            target.domains.setdefault(label, title)
+        for side in target.counterparts:
+            for c in s.counterparts[side]:
+                target.counterparts[side].setdefault(c, None)
+        for o in s.originals:
+            target.originals.setdefault(o, None)
+        for h, v in s.extras.items():
+            if v not in target.extras.values():
+                target.extras.setdefault(h, v)
+        for k2, v2 in list(g.senses.items()):
+            if v2 is s:
+                del g.senses[k2]
+
+
+def final_senses(g, key=""):
+    """Senses in display order, with formatting variants of the same English folded together.
+    A sense without English (a row of the 兩岸 word lists) is kept only for counterparts that no
+    sense with English already shows."""
+    fold_variants(g, key)
     shown = {side: set() for side in ("大陆", "台湾")}
     for s in g.senses.values():
         if s.en:
@@ -468,7 +567,7 @@ def build(catalog):
 
         for seq, key in enumerate(sorted(groups), start=1):
             g = groups.pop(key)
-            senses = final_senses(g)
+            senses = final_senses(g, key)
             glossary = [{
                 "type": "structured-content",
                 "content": node("span", [
@@ -489,6 +588,10 @@ def build(catalog):
             flush()
     n_headwords = seq
     log(f"wrote {zip_path}: {n_headwords:,} headwords, {n_entries:,} entries")
+    (DIST_DIR / "variant_folds.tsv").write_text(
+        "headword\tvariant\tkept\n" + "".join(f"{k}\t{v}\t{t}\n" for k, v, t in variant_folds), encoding="utf-8")
+    log(f"folded {len(variant_folds):,} formatting variants of English equivalents (dist/variant_folds.tsv); "
+        f"{len(EN_CORRECTIONS):,} misspellings corrected from en_corrections.tsv")
     write_repo_files(index, updated, n_headwords, n_entries, n_rows, n_files, zip_path.stat().st_size)
 
 
