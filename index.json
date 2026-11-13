@@ -1,0 +1,12 @@
+{
+  "title": "樂詞網",
+  "revision": "2026-11-13T12:45:40Z",
+  "format": 3,
+  "sequenced": true,
+  "sourceLanguage": "zh",
+  "targetLanguage": "en",
+  "author": "National Academy for Educational Research (國家教育研究院)",
+  "url": "https://terms.naer.edu.tw/",
+  "description": "1,286,299 Chinese technical and academic terms with their English equivalents and subject labels, from 240 term lists on the NAER Web of Words (樂詞網), updated up to 2026-11-11. Taiwan terms and their mainland Chinese equivalents are both headwords and point to each other. Simplified and traditional lookup forms; no frequency data.",
+  "attribution": "Term data from 國家教育研究院 樂詞網 (National Academy for Educational Research, Web of Words), https://terms.naer.edu.tw/, used under the site's open data declaration (政府網站資料開放宣告). Terms were regrouped by headword and converted to simplified Chinese."
+}

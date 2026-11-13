@@ -1,0 +1,16 @@
+Source attribution
+
+國家教育研究院 樂詞網 (National Academy for Educational Research, Web of Words)
+https://terms.naer.edu.tw/
+Downloads: https://terms.naer.edu.tw/download/ (term lists updated up to 2026-11-11)
+
+Used under the site's 政府網站資料開放宣告 (open data declaration,
+https://terms.naer.edu.tw/mysite/about/2/), which allows free, non-exclusive,
+irrevocable reuse, adaptation and redistribution provided the source is cited.
+
+Changes: rows from all downloadable term lists were regrouped by Chinese
+headword, with each English equivalent listed once together with the
+subject areas it comes from. Taiwan terms and mainland Chinese equivalents
+(中國大陸譯名) are both used as headwords. Chinese text is converted to
+simplified Chinese with OpenCC; readings come from pypinyin and may be wrong
+for some terms. This is not an official NAER product.

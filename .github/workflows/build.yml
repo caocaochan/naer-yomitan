@@ -1,0 +1,115 @@
+name: Build
+
+# Rebuilds and publishes the dictionary when the NAER download page lists new or updated term lists
+# (checked daily), when the generator or styles change on main, or on demand.
+on:
+  schedule:
+    - cron: "30 5 * * *" # 05:30 UTC daily; builds only if source_catalog.tsv changed
+  push:
+    branches: [main]
+    paths:
+      - build_dictionary.py
+      - naer_fetch.py
+      - naer_read.py
+      - styles.css
+      - requirements.txt
+  workflow_dispatch:
+    inputs:
+      force:
+        description: "Build even if the term lists are unchanged"
+        type: boolean
+        default: false
+      dry_run:
+        description: "Build and validate only; don't publish a release or update index.json"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: build
+  cancel-in-progress: false
+
+env:
+  PYTHONUNBUFFERED: "1"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+          cache: pip
+
+      - name: Install dependencies
+        run: python -m pip install -r requirements.txt jsonschema
+
+      - name: Check for updated term lists
+        id: check
+        env:
+          EVENT: ${{ github.event_name }}
+          FORCE: ${{ inputs.force || false }}
+        run: |
+          python build_dictionary.py catalog
+          if git diff --quiet -- source_catalog.tsv; then
+            echo "Term lists unchanged since the last release."
+            if [ "$EVENT" = schedule ] || { [ "$EVENT" = workflow_dispatch ] && [ "$FORCE" != true ]; }; then
+              echo "skip=true" >> "$GITHUB_OUTPUT"
+            fi
+          else
+            echo "Changed term lists:"
+            git diff --unified=0 -- source_catalog.tsv | grep '^[-+][^-+]' || true
+          fi
+
+      # Downloaded archives, keyed by the catalog. An updated list gets a new file name on the site,
+      # so a partial cache hit only downloads the changed lists.
+      - uses: actions/cache@v4
+        if: steps.check.outputs.skip != 'true'
+        with:
+          path: data/raw
+          key: naer-raw-${{ hashFiles('source_catalog.tsv') }}
+          restore-keys: naer-raw-
+
+      - name: Build dictionary
+        if: steps.check.outputs.skip != 'true'
+        run: |
+          /usr/bin/time -v -o time.log python build_dictionary.py all
+          grep -E "Maximum resident|Elapsed" time.log
+
+      - name: Validate
+        if: steps.check.outputs.skip != 'true'
+        run: python validate.py dist/naer_terms.zip
+
+      - name: Publish release
+        id: release
+        if: steps.check.outputs.skip != 'true' && inputs.dry_run != true
+        run: |
+          revision=$(python -c "import json; print(json.load(open('index.json'))['revision'])")
+          tag="v$(echo "$revision" | tr -d ':Z' | tr 'T' '-' | cut -c1-15)"   # e.g. v2026-11-13-1245
+          gh release create "$tag" dist/naer_terms.zip \
+            --target "$GITHUB_SHA" \
+            --title "$(cat dist/release_title.txt)" \
+            --notes-file dist/release_notes.md \
+            --latest
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
+      # Commit index.json only after the ZIP is live, so Yomitan never sees a new revision
+      # before it can download it.
+      - name: Update index.json
+        if: steps.check.outputs.skip != 'true' && inputs.dry_run != true
+        env:
+          TAG: ${{ steps.release.outputs.tag }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add index.json source_attribution.txt README.md source_catalog.tsv
+          git commit -m "Update dictionary ($TAG)"
+          git pull --rebase origin main
+          git push origin HEAD:main
