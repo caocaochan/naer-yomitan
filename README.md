@@ -14,7 +14,7 @@ NAER adds and revises lists throughout the year. The download page is checked da
 ## Contents
 
 <!-- stats:start -->
-- 1,286,172 headwords from 2,028,417 rows in 240 NAER term lists (newest update 2026-11-11), 2,451,838 simplified and traditional lookup entries
+- 1,286,620 headwords from 2,028,920 rows in 240 NAER term lists (newest update 2026-11-20), 2,452,626 simplified and traditional lookup entries
 - Yomitan package: dictionary format 3, 88 MB
 <!-- stats:end -->
 - Each entry starts with traditional and simplified badges, styled like the HYDCD, chengyu and Wikipedia dictionaries, followed by numbered senses: the English equivalent, then labels for the subject areas whose lists contain it (hover a label for the full list name; `+N` hides the rest). Senses found in more subject areas come first.

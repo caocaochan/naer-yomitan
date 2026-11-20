@@ -1,6 +1,6 @@
 {
   "title": "樂詞網",
-  "revision": "2026-11-13T14:02:01Z",
+  "revision": "2026-11-20T14:17:35Z",
   "format": 3,
   "sequenced": true,
   "sourceLanguage": "zh",
@@ -10,6 +10,6 @@
   "indexUrl": "https://raw.githubusercontent.com/caocaochan/naer-yomitan/main/index.json",
   "downloadUrl": "https://github.com/caocaochan/naer-yomitan/releases/latest/download/naer_terms.zip",
   "url": "https://github.com/caocaochan/naer-yomitan",
-  "description": "1,286,172 Chinese technical and academic terms with their English equivalents and subject labels, from 240 term lists on the NAER Web of Words (樂詞網), updated up to 2026-11-11. Taiwan terms and their mainland Chinese equivalents are both headwords and point to each other. Simplified and traditional lookup forms; no frequency data.",
+  "description": "1,286,620 Chinese technical and academic terms with their English equivalents and subject labels, from 240 term lists on the NAER Web of Words (樂詞網), updated up to 2026-11-20. Taiwan terms and their mainland Chinese equivalents are both headwords and point to each other. Simplified and traditional lookup forms; no frequency data.",
   "attribution": "Term data from 國家教育研究院 樂詞網 (National Academy for Educational Research, Web of Words), https://terms.naer.edu.tw/, used under the site's open data declaration (政府網站資料開放宣告). Terms were regrouped by headword and converted to simplified Chinese."
 }
